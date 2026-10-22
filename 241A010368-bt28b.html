@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Bài tập 28b - Game kiểm tra tốc độ (Nâng cấp 2)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+        td {
+            padding: 6px 12px;
+            font-size: 15px;
+        }
+        #arena {
+            width: 700px;
+            height: 450px;
+            background-color: #eef5ff;
+            border: 2px solid #000000;
+            position: relative;
+            margin-top: 10px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        .muctieu {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            position: absolute;
+            text-align: center;
+            line-height: 42px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            animation-name: hieuUng;
+            animation-timing-function: linear;
+            animation-fill-mode: forwards;
+        }
+        @keyframes hieuUng {
+            0% { opacity: 0; transform: scale(0.4); }
+            15% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0.2; transform: scale(0.3); }
+        }
+    </style>
+</head>
+<body onLoad="taiDiemCao()">
+    <h3>Bài tập 28b - Game kiểm tra tốc độ phản xạ (Nâng cấp 2)</h3>
+    <p>Sinh viên: Ngô Hữu Phúc - MSSV: 241A010368 - Lớp: 241A0107</p>
+
+    <form name="frmGame">
+        <table border="1">
+            <tr>
+                <td>Điểm: <input type="text" name="txtDiem" value="0" size="3" readonly></td>
+                <td>Mạng: <input type="text" name="txtMang" value="3" size="3" readonly></td>
+                <td>Level: <input type="text" name="txtLevel" value="1" size="3" readonly></td>
+                <!-- Thêm ô tùy chọn thời gian chạy ngược -->
+                <td>TG cài đặt: <input type="number" id="txtThoiGianChon" value="30" min="5" max="300" style="width: 45px">s</td>
+                <td>Còn lại: <input type="text" name="txtGiay" value="30" size="3" readonly>s</td>
+                <td>Điểm cao: <input type="text" name="txtHighScore" value="0" size="3" readonly></td>
+            </tr>
+            <tr>
+                <td colspan="6">
+                    <b>Quy tắc:</b> 
+                    <span style="color: green;">● Xanh (+1 điểm)</span> &nbsp;|&nbsp; 
+                    <span style="color: red;">● Đỏ (-2 điểm, mất 1 mạng)</span> &nbsp;|&nbsp; 
+                    <span style="color: #d4ac0d;">● Vàng (+3 điểm, +2s, lỡ mất 1 mạng)</span>
+                </td>
+            </tr>
+        </table>
+
+        <input type="button" name="btnStart" value="Bắt đầu trò chơi" onClick="batDau()">
+        <input type="button" name="btnStop" value="Kết thúc" onClick="ketThucGame('Đã dừng trò chơi!')" disabled>
+        
+        <!-- Yêu cầu 1 & 2: Thêm các nút chức năng mới -->
+        <input type="button" value="Đổi màu nền" onClick="doiMauNen()">
+        <input type="button" value="Người chơi" onClick="hienThiNguoiChoi()">
+        
+        &nbsp; <b id="thongBao" style="color: blue;">Nhấn "Bắt đầu trò chơi" để chơi!</b>
+    </form>
+
+    <div id="arena" onClick="clickTruot()"></div>
+
+    <script language="JavaScript">
+        var diem = 0;
+        var mang = 3;
+        var level = 1;
+        var giay = 30;
+        var dangChoi = false;
+        var khoaChuot = false;
+        var mauNenHienTai = "#eef5ff"; // Lưu màu nền hiện tại để không bị mất khi click trượt
+
+        var tgDemNguoc = null;
+        var tgSinhMucTieu = null;
+        var dsMucTieu = [];
+
+        var tocDoGoc = 1000;
+        var tonTaiGoc = 2000;
+
+        // Chức năng đổi màu nền ngẫu nhiên
+        function doiMauNen() {
+            mauNenHienTai = '#' + Math.floor(Math.random()*16777215).toString(16);
+            document.getElementById("arena").style.backgroundColor = mauNenHienTai;
+        }
+
+        // Chức năng hiển thị thông tin người chơi
+        function hienThiNguoiChoi() {
+            alert("THÔNG TIN NGƯỜI CHƠI\n-------------------------\nHọ và tên: Ngô Hữu Phúc\nMã SV: 241A010368\nLớp: 241A0107");
+        }
+
+        function taiDiemCao() {
+            var maHoa = localStorage.getItem("diemCao_28b");
+            if (maHoa != null) {
+                try {
+                    var giaiMa = atob(maHoa).replace("VHU_", "");
+                    document.frmGame.txtHighScore.value = parseInt(giaiMa) || 0;
+                } catch (e) {
+                    document.frmGame.txtHighScore.value = 0;
+                }
+            }
+        }
+
+        function luuDiemCao(diemMoi) {
+            var diemCu = parseInt(document.frmGame.txtHighScore.value) || 0;
+            if (diemMoi > diemCu) {
+                localStorage.setItem("diemCao_28b", btoa("VHU_" + diemMoi));
+                document.frmGame.txtHighScore.value = diemMoi;
+            }
+        }
+
+        function donDepBoNho() {
+            if (tgDemNguoc != null) clearInterval(tgDemNguoc);
+            if (tgSinhMucTieu != null) clearInterval(tgSinhMucTieu);
+            tgDemNguoc = null;
+            tgSinhMucTieu = null;
+
+            for (var i = 0; i < dsMucTieu.length; i++) {
+                clearTimeout(dsMucTieu[i].timeoutId);
+            }
+            dsMucTieu = [];
+            document.getElementById("arena").innerHTML = "";
+        }
+
+        function capNhatForm() {
+            document.frmGame.txtDiem.value = diem;
+            document.frmGame.txtMang.value = mang;
+            document.frmGame.txtLevel.value = level;
+            document.frmGame.txtGiay.value = giay;
+        }
+
+        function batDau() {
+            donDepBoNho();
+            diem = 0;
+            mang = 3;
+            level = 1;
+            
+            // Lấy thời gian đếm ngược tùy chọn từ input
+            var tgChon = parseInt(document.getElementById("txtThoiGianChon").value);
+            giay = (isNaN(tgChon) || tgChon <= 0) ? 30 : tgChon; 
+            
+            dangChoi = true;
+            khoaChuot = false;
+            capNhatForm();
+
+            document.frmGame.btnStart.disabled = true;
+            document.frmGame.btnStop.disabled = false;
+            document.getElementById("thongBao").style.color = "blue";
+            document.getElementById("thongBao").innerText = "Đang chơi... Hãy click vào hình tròn Xanh và Vàng!";
+
+            sinhMucTieu();
+            caiDatTocDo();
+            tgDemNguoc = setInterval(truGiay, 1000);
+        }
+
+        function caiDatTocDo() {
+            if (tgSinhMucTieu != null) clearInterval(tgSinhMucTieu);
+            var tocDoMoi = Math.floor(tocDoGoc * Math.pow(0.85, level - 1));
+            tgSinhMucTieu = setInterval(sinhMucTieu, tocDoMoi);
+        }
+
+        function kiemTraLevel() {
+            var capMoi = Math.floor(diem / 10) + 1;
+            if (capMoi < 1) capMoi = 1;
+            if (capMoi != level) {
+                level = capMoi;
+                caiDatTocDo();
+                document.getElementById("thongBao").innerText = "Lên cấp độ " + level + "! Tốc độ nhanh hơn 15%.";
+            }
+        }
+
+        function timToaDo() {
+            var x, y, biTrung;
+            var lanThu = 0;
+            do {
+                biTrung = false;
+                x = Math.floor(Math.random() * 650);
+                y = Math.floor(Math.random() * 400);
+                for (var i = 0; i < dsMucTieu.length; i++) {
+                    var dx = x - dsMucTieu[i].x;
+                    var dy = y - dsMucTieu[i].y;
+                    if (Math.sqrt(dx * dx + dy * dy) < 48) {
+                        biTrung = true;
+                        break;
+                    }
+                }
+                lanThu++;
+            } while (biTrung && lanThu < 30);
+            return { x: x, y: y };
+        }
+
+        function sinhMucTieu() {
+            if (!dangChoi) return;
+
+            var toaDo = timToaDo();
+            var tl = Math.random();
+            var loai = "green";
+            var tgTonTai = Math.floor(tonTaiGoc * Math.pow(0.85, level - 1));
+
+            var div = document.createElement("div");
+            div.className = "muctieu";
+            div.style.left = toaDo.x + "px";
+            div.style.top = toaDo.y + "px";
+
+            if (tl < 0.6) {
+                loai = "green";
+                div.style.backgroundColor = "green";
+                div.innerText = "+1";
+            } else if (tl < 0.8) {
+                loai = "red";
+                div.style.backgroundColor = "red";
+                div.innerText = "-2";
+            } else {
+                loai = "gold";
+                tgTonTai = 1500;
+                div.style.backgroundColor = "#f1c40f";
+                div.style.color = "black";
+                div.innerText = "+3";
+            }
+
+            div.style.animationDuration = (tgTonTai / 1000) + "s";
+            var id = Date.now() + "_" + Math.random();
+
+            div.onclick = function(e) {
+                e.stopPropagation();
+                clickTrung(id, loai, div);
+            };
+
+            var timeoutId = setTimeout(function() {
+                xoaMucTieu(id, div);
+                if (dangChoi && loai == "gold") {
+                    mang = mang - 1;
+                    capNhatForm();
+                    document.getElementById("thongBao").style.color = "red";
+                    document.getElementById("thongBao").innerText = "Bỏ lỡ mục tiêu Vàng! Mất 1 mạng (Còn " + mang + " mạng).";
+                    if (mang <= 0) {
+                        ketThucGame("Hết mạng do bỏ lỡ mục tiêu Vàng!");
+                    }
+                }
+            }, tgTonTai);
+
+            dsMucTieu.push({ id: id, x: toaDo.x, y: toaDo.y, timeoutId: timeoutId });
+            document.getElementById("arena").appendChild(div);
+        }
+
+        function xoaMucTieu(id, div) {
+            for (var i = 0; i < dsMucTieu.length; i++) {
+                if (dsMucTieu[i].id == id) {
+                    clearTimeout(dsMucTieu[i].timeoutId);
+                    dsMucTieu.splice(i, 1);
+                    break;
+                }
+            }
+            if (div.parentNode) {
+                div.parentNode.removeChild(div);
+            }
+        }
+
+        function clickTrung(id, loai, div) {
+            if (!dangChoi || khoaChuot) return;
+
+            xoaMucTieu(id, div);
+
+            if (loai == "green") {
+                diem = diem + 1;
+                document.getElementById("thongBao").style.color = "green";
+                document.getElementById("thongBao").innerText = "Click trúng mục tiêu Xanh (+1 điểm)";
+            } else if (loai == "red") {
+                diem = diem - 2;
+                mang = mang - 1;
+                document.getElementById("thongBao").style.color = "red";
+                document.getElementById("thongBao").innerText = "Click trúng bẫy Đỏ (-2 điểm, mất 1 mạng)";
+            } else if (loai == "gold") {
+                diem = diem + 3;
+                giay = giay + 2;
+                document.getElementById("thongBao").style.color = "#b7950b";
+                document.getElementById("thongBao").innerText = "Click trúng mục tiêu Vàng (+3 điểm, +2 giây)";
+            }
+
+            kiemTraLevel();
+            capNhatForm();
+
+            if (mang <= 0) {
+                ketThucGame("Trò chơi kết thúc do bạn đã hết mạng!");
+            }
+        }
+
+        function clickTruot() {
+            if (!dangChoi || khoaChuot) return;
+
+            diem = diem - 1;
+            khoaChuot = true;
+            capNhatForm();
+
+            document.getElementById("thongBao").style.color = "red";
+            document.getElementById("thongBao").innerText = "Click trượt vào vùng trống! Bị trừ 1 điểm và khóa chuột 0.5s";
+            document.getElementById("arena").style.backgroundColor = "#ffcccc";
+
+            setTimeout(function() {
+                khoaChuot = false;
+                document.getElementById("arena").style.backgroundColor = mauNenHienTai; // Trả về màu nền đã chọn
+            }, 500);
+        }
+
+        function truGiay() {
+            if (!dangChoi) return;
+            giay = giay - 1;
+            capNhatForm();
+
+            // Yêu cầu: Đồng hồ về 0, khóa thao tác và hiển thị tổng điểm
+            if (giay <= 0) {
+                ketThucGame("Hết giờ!");
+            }
+        }
+
+        function ketThucGame(lyDo) {
+            dangChoi = false; // Khóa toàn bộ thao tác click
+            donDepBoNho();
+            luuDiemCao(diem);
+            capNhatForm();
+
+            document.frmGame.btnStart.disabled = false;
+            document.frmGame.btnStop.disabled = true;
+            document.getElementById("arena").style.backgroundColor = mauNenHienTai;
+            document.getElementById("thongBao").style.color = "red";
+            document.getElementById("thongBao").innerText = lyDo + " Tổng điểm: " + diem + " | Mạng còn lại: " + mang;
+
+            setTimeout(function() {
+                alert(lyDo + "\nTổng số điểm đạt được: " + diem + "\nCấp độ: " + level + "\nMạng còn lại: " + mang);
+            }, 100);
+        }
+    </script>
+</body>
+</html>
